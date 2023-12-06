@@ -30,6 +30,14 @@
 #ifndef _TINY_JSON_H_
 #define	_TINY_JSON_H_
 
+#ifdef TINY_JSON_USE_WCHAR
+typedef wchar_t CHAR_T;
+#define T(str) L##str
+#else
+typedef char CHAR_T;
+#define T(str) str
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -40,7 +48,7 @@ extern "C" {
 #include <stdint.h>
 
 #define json_containerOf( ptr, type, member ) \
-    ((type*)( (char*)ptr - offsetof( type, member ) ))
+    ((type*)( (unsigned char*)ptr - offsetof( type, member ) ))
 
 /** @defgroup tinyJson Tiny JSON parser.
   * @{ */
@@ -54,9 +62,9 @@ typedef enum {
 /** Structure to handle JSON properties. */
 typedef struct json_s {
     struct json_s* sibling;
-    char const* name;
+    CHAR_T const* name;
     union {
-        char const* value;
+        CHAR_T const* value;
         struct {
             struct json_s* child;
             struct json_s* last_child;
@@ -72,13 +80,13 @@ typedef struct json_s {
   * @retval Null pointer if any was wrong in the parse process.
   * @retval If the parser process was successfully a valid handler of a json.
   *         This property is always unnamed and its type is JSON_OBJ. */
-json_t const* json_create( char* str, json_t mem[], unsigned int qty );
+json_t const* json_create( CHAR_T* str, json_t mem[], unsigned int qty );
 
 /** Get the name of a json property.
   * @param json A valid handler of a json property.
   * @retval Pointer to null-terminated if property has name.
   * @retval Null pointer if the property is unnamed. */
-static inline char const* json_getName( json_t const* json ) {
+static inline CHAR_T const* json_getName( json_t const* json ) {
     return json->name;
 }
 
@@ -86,7 +94,7 @@ static inline char const* json_getName( json_t const* json ) {
   * The type of property cannot be JSON_OBJ or JSON_ARRAY.
   * @param property A valid handler of a json property.
   * @return Pointer to null-terminated string with the value. */
-static inline char const* json_getValue( json_t const* property ) {
+static inline CHAR_T const* json_getValue( json_t const* property ) {
     return property->u.value;
 }
 
@@ -110,7 +118,7 @@ static inline json_t const* json_getSibling( json_t const* json ) {
   * @param property The name of property to get.
   * @retval The handler of the json property if found.
   * @retval Null pointer if not found. */
-json_t const* json_getProperty( json_t const* obj, char const* property );
+json_t const* json_getProperty( json_t const* obj, CHAR_T const* property );
 
 
 /** Search a property by its name in a JSON object and return its value.
@@ -118,7 +126,7 @@ json_t const* json_getProperty( json_t const* obj, char const* property );
   * @param property The name of property to get.
   * @retval If found a pointer to null-terminated string with the value.
   * @retval Null pointer if not found or it is an array or an object. */
-char const* json_getPropertyValue( json_t const* obj, char const* property );
+CHAR_T const* json_getPropertyValue( json_t const* obj, CHAR_T const* property );
 
 /** Get the first property of a JSON object or array.
   * @param json A valid handler of a json property.
@@ -133,24 +141,30 @@ static inline json_t const* json_getChild( json_t const* json ) {
   * @param property A valid handler of a json object. Its type must be JSON_BOOLEAN.
   * @return The value stdbool. */
 static inline bool json_getBoolean( json_t const* property ) {
-    return *property->u.value == 't';
+    return *property->u.value == T('t');
 }
 
 /** Get the value of a json integer property.
   * @param property A valid handler of a json object. Its type must be JSON_INTEGER.
   * @return The value stdint. */
 static inline int64_t json_getInteger( json_t const* property ) {
-  return strtoll( property->u.value,(char**)NULL, 10);
+#ifdef TINY_JSON_USE_WCHAR
+    return wcstoll (property->u.value, (wchar_t **) NULL, 10);
+#else
+    return strtoll (property->u.value, (char **) NULL, 10);
+#endif
 }
 
 /** Get the value of a json real property.
   * @param property A valid handler of a json object. Its type must be JSON_REAL.
   * @return The value. */
 static inline double json_getReal( json_t const* property ) {
-  return strtod( property->u.value,(char**)NULL );
+#ifdef TINY_JSON_USE_WCHAR
+    return wcstod (property->u.value, (CHAR_T **) NULL);
+#else
+    return strtod (property->u.value, (char **) NULL);
+#endif
 }
-
-
 
 /** Structure to handle a heap of JSON properties. */
 typedef struct jsonPool_s jsonPool_t;
@@ -165,7 +179,7 @@ struct jsonPool_s {
   * @retval Null pointer if any was wrong in the parse process.
   * @retval If the parser process was successfully a valid handler of a json.
   *         This property is always unnamed and its type is JSON_OBJ. */
-json_t const* json_createWithPool( char* str, jsonPool_t* pool );
+json_t const* json_createWithPool( CHAR_T* str, jsonPool_t* pool );
 
 /** @ } */
 

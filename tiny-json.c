@@ -40,16 +40,20 @@ typedef struct jsonStaticPool_s {
 } jsonStaticPool_t;
 
 /* Search a property by its name in a JSON object. */
-json_t const* json_getProperty( json_t const* obj, char const* property ) {
+json_t const* json_getProperty( json_t const* obj, CHAR_T const* property ) {
     json_t const* sibling;
     for( sibling = obj->u.c.child; sibling; sibling = sibling->sibling )
-        if ( sibling->name && !strcmp( sibling->name, property ) )
+#ifdef TINY_JSON_USE_WCHAR
+        if (sibling->name && !wcscmp (sibling->name, property))
+#else
+        if (sibling->name && !strcmp (sibling->name, property))
+#endif
             return sibling;
     return 0;
 }
 
 /* Search a property by its name in a JSON object and return its value. */
-char const* json_getPropertyValue( json_t const* obj, char const* property ) {
+CHAR_T const* json_getPropertyValue( json_t const* obj, CHAR_T const* property ) {
 	json_t const* field = json_getProperty( obj, property );
 	if ( !field ) return 0;
         jsonType_t type = json_getType( field );
@@ -58,18 +62,18 @@ char const* json_getPropertyValue( json_t const* obj, char const* property ) {
 }
 
 /* Internal prototypes: */
-static char* goBlank( char* str );
-static char* goNum( char* str );
+static CHAR_T* goBlank( CHAR_T* str );
+static CHAR_T* goNum( CHAR_T* str );
 static json_t* poolInit( jsonPool_t* pool );
 static json_t* poolAlloc( jsonPool_t* pool );
-static char* objValue( char* ptr, json_t* obj, jsonPool_t* pool );
-static char* setToNull( char* ch );
-static bool isEndOfPrimitive( char ch );
+static CHAR_T* objValue( CHAR_T* ptr, json_t* obj, jsonPool_t* pool );
+static CHAR_T* setToNull( CHAR_T* ch );
+static bool isEndOfPrimitive( CHAR_T ch );
 
 /* Parse a string to get a json. */
-json_t const* json_createWithPool( char *str, jsonPool_t *pool ) {
-    char* ptr = goBlank( str );
-    if ( !ptr || (*ptr != '{' && *ptr != '[') ) return 0;
+json_t const* json_createWithPool( CHAR_T *str, jsonPool_t *pool ) {
+    CHAR_T* ptr = goBlank( str );
+    if ( !ptr || (*ptr != T('{') && *ptr != T('[')) ) return 0;
     json_t* obj = pool->init( pool );
     obj->name    = 0;
     obj->sibling = 0;
@@ -80,7 +84,7 @@ json_t const* json_createWithPool( char *str, jsonPool_t *pool ) {
 }
 
 /* Parse a string to get a json. */
-json_t const* json_create( char* str, json_t mem[], unsigned int qty ) {
+json_t const* json_create( CHAR_T* str, json_t mem[], unsigned int qty ) {
     jsonStaticPool_t spool;
     spool.mem = mem;
     spool.qty = qty;
@@ -93,30 +97,30 @@ json_t const* json_create( char* str, json_t mem[], unsigned int qty ) {
   * 'b' -> '\\b', 'n' -> '\\n', 't' -> '\\t'
   * @param ch The escape character.
   * @retval  The character code. */
-static char getEscape( char ch ) {
-    static struct { char ch; char code; } const pair[] = {
-        { '\"', '\"' }, { '\\', '\\' },
-        { '/',  '/'  }, { 'b',  '\b' },
-        { 'f',  '\f' }, { 'n',  '\n' },
-        { 'r',  '\r' }, { 't',  '\t' },
+static CHAR_T getEscape( CHAR_T ch ) {
+    static struct { CHAR_T ch; CHAR_T code; } const pair[] = {
+        { T('\"'), T('\"') }, { T('\\'), T('\\') },
+        { T('/'),  T('/')  }, { T('b'),  T('\b') },
+        { T('f'),  T('\f') }, { T('n'),  T('\n') },
+        { T('r'),  T('\r') }, { T('t'),  T('\t') },
     };
     unsigned int i;
     for( i = 0; i < sizeof pair / sizeof *pair; ++i )
         if ( pair[i].ch == ch )
             return pair[i].code;
-    return '\0';
+    return T('\0');
 }
 
 /** Parse 4 characters.
   * @param str Pointer to  first digit.
   * @retval '?' If the four characters are hexadecimal digits.
   * @retval '\0' In other cases. */
-static unsigned char getCharFromUnicode( unsigned char const* str ) {
+static CHAR_T getCharFromUnicode(CHAR_T const* str ) {
     unsigned int i;
     for( i = 0; i < 4; ++i )
         if ( !isxdigit( str[i] ) )
-            return '\0';
-    return '?';
+            return T('\0');
+    return T('?');
 }
 
 /** Parse a string and replace the scape characters by their meaning characters.
@@ -124,24 +128,24 @@ static unsigned char getCharFromUnicode( unsigned char const* str ) {
   * @param str Pointer to first character.
   * @retval Pointer to first non white space after the string. If success.
   * @retval Null pointer if any error occur. */
-static char* parseString( char* str ) {
-    unsigned char* head = (unsigned char*)str;
-    unsigned char* tail = (unsigned char*)str;
+static CHAR_T* parseString( CHAR_T* str ) {
+    CHAR_T* head = str;
+    CHAR_T* tail = str;
     for( ; *head; ++head, ++tail ) {
-        if ( *head == '\"' ) {
-            *tail = '\0';
-            return (char*)++head;
+        if ( *head == T('\"') ) {
+            *tail = T('\0');
+            return ++head;
         }
-        if ( *head == '\\' ) {
-            if ( *++head == 'u' ) {
-                char const ch = getCharFromUnicode( ++head );
-                if ( ch == '\0' ) return 0;
+        if ( *head == T('\\') ) {
+            if ( *++head == T('u') ) {
+                CHAR_T const ch = getCharFromUnicode( ++head );
+                if ( ch == T('\0') ) return 0;
                 *tail = ch;
                 head += 3;
             }
             else {
-                char const esc = getEscape( *head );
-                if ( esc == '\0' ) return 0;
+                CHAR_T const esc = getEscape( *head );
+                if ( esc == T('\0') ) return 0;
                 *tail = esc;
             }
         }
@@ -155,13 +159,13 @@ static char* parseString( char* str ) {
   * @param property The property to assign the name.
   * @retval Pointer to first of property value. If success.
   * @retval Null pointer if any error occur. */
-static char* propertyName( char* ptr, json_t* property ) {
+static CHAR_T* propertyName( CHAR_T* ptr, json_t* property ) {
     property->name = ++ptr;
     ptr = parseString( ptr );
     if ( !ptr ) return 0;
     ptr = goBlank( ptr );
     if ( !ptr ) return 0;
-    if ( *ptr++ != ':' ) return 0;
+    if ( *ptr++ != T(':') ) return 0;
     return goBlank( ptr );
 }
 
@@ -170,7 +174,7 @@ static char* propertyName( char* ptr, json_t* property ) {
   * @param property The property to assign the name.
   * @retval Pointer to first non white space after the string. If success.
   * @retval Null pointer if any error occur. */
-static char* textValue( char* ptr, json_t* property ) {
+static CHAR_T* textValue( CHAR_T* ptr, json_t* property ) {
     ++property->u.value;
     ptr = parseString( ++ptr );
     if ( !ptr ) return 0;
@@ -183,7 +187,7 @@ static char* textValue( char* ptr, json_t* property ) {
   * @param str main string
   * @retval Pointer to next character.
   * @retval Null pointer if any error occur. */
-static char* checkStr( char* ptr, char const* str ) {
+static CHAR_T* checkStr( CHAR_T* ptr, CHAR_T const* str ) {
     while( *str )
         if ( *ptr++ != *str++ )
             return 0;
@@ -198,7 +202,7 @@ static char* checkStr( char* ptr, char const* str ) {
   * @param type The code of the type. ( JSON_BOOLEAN or JSON_NULL )
   * @retval Pointer to first non white space after the string. If success.
   * @retval Null pointer if any error occur. */
-static char* primitiveValue( char* ptr, json_t* property, char const* value, jsonType_t type ) {
+static CHAR_T* primitiveValue( CHAR_T* ptr, json_t* property, CHAR_T const* value, jsonType_t type ) {
     ptr = checkStr( ptr, value );
     if ( !ptr || !isEndOfPrimitive( *ptr ) ) return 0;
     ptr = setToNull( ptr );
@@ -212,8 +216,8 @@ static char* primitiveValue( char* ptr, json_t* property, char const* value, jso
   * @param property Property handler to set the value and the type, (true, false or null).
   * @retval Pointer to first non white space after the string. If success.
   * @retval Null pointer if any error occur. */
-static char* trueValue( char* ptr, json_t* property ) {
-    return primitiveValue( ptr, property, "true", JSON_BOOLEAN );
+static CHAR_T* trueValue( CHAR_T* ptr, json_t* property ) {
+    return primitiveValue( ptr, property, T("true"), JSON_BOOLEAN );
 }
 
 /** Parser a string to get a false value.
@@ -222,8 +226,8 @@ static char* trueValue( char* ptr, json_t* property ) {
   * @param property Property handler to set the value and the type, (true, false or null).
   * @retval Pointer to first non white space after the string. If success.
   * @retval Null pointer if any error occur. */
-static char* falseValue( char* ptr, json_t* property ) {
-    return primitiveValue( ptr, property, "false", JSON_BOOLEAN );
+static CHAR_T* falseValue( CHAR_T* ptr, json_t* property ) {
+    return primitiveValue( ptr, property, T("false"), JSON_BOOLEAN );
 }
 
 /** Parser a string to get a null value.
@@ -232,16 +236,16 @@ static char* falseValue( char* ptr, json_t* property ) {
   * @param property Property handler to set the value and the type, (true, false or null).
   * @retval Pointer to first non white space after the string. If success.
   * @retval Null pointer if any error occur. */
-static char* nullValue( char* ptr, json_t* property ) {
-    return primitiveValue( ptr, property, "null", JSON_NULL );
+static CHAR_T* nullValue( CHAR_T* ptr, json_t* property ) {
+    return primitiveValue( ptr, property, T("null"), JSON_NULL );
 }
 
 /** Analyze the exponential part of a real number.
   * @param ptr Pointer to first character.
   * @retval Pointer to first non numerical after the string. If success.
   * @retval Null pointer if any error occur. */
-static char* expValue( char* ptr ) {
-    if ( *ptr == '-' || *ptr == '+' ) ++ptr;
+static CHAR_T* expValue( CHAR_T* ptr ) {
+    if ( *ptr == T('-') || *ptr == T('+') ) ++ptr;
     if ( !isdigit( (int)(*ptr) ) ) return 0;
     ptr = goNum( ++ptr );
     return ptr;
@@ -251,7 +255,7 @@ static char* expValue( char* ptr ) {
   * @param ptr Pointer to first character.
   * @retval Pointer to first non numerical after the string. If success.
   * @retval Null pointer if any error occur. */
-static char* fraqValue( char* ptr ) {
+static CHAR_T* fraqValue( CHAR_T* ptr ) {
     if ( !isdigit( (int)(*ptr) ) ) return 0;
     ptr = goNum( ++ptr );
     if ( !ptr ) return 0;
@@ -264,39 +268,45 @@ static char* fraqValue( char* ptr ) {
   * @param property Property handler to set the value and the type: JSON_REAL or JSON_INTEGER.
   * @retval Pointer to first non white space after the string. If success.
   * @retval Null pointer if any error occur. */
-static char* numValue( char* ptr, json_t* property ) {
-    if ( *ptr == '-' ) ++ptr;
+static CHAR_T* numValue( CHAR_T* ptr, json_t* property ) {
+    if ( *ptr == T('-') ) ++ptr;
     if ( !isdigit( (int)(*ptr) ) ) return 0;
-    if ( *ptr != '0' ) {
+    if ( *ptr != T('0') ) {
         ptr = goNum( ptr );
         if ( !ptr ) return 0;
     }
     else if ( isdigit( (int)(*++ptr) ) ) return 0;
     property->type = JSON_INTEGER;
-    if ( *ptr == '.' ) {
+    if ( *ptr == T('.') ) {
         ptr = fraqValue( ++ptr );
         if ( !ptr ) return 0;
         property->type = JSON_REAL;
     }
-    if ( *ptr == 'e' || *ptr == 'E' ) {
+    if ( *ptr == T('e') || *ptr == T('E') ) {
         ptr = expValue( ++ptr );
         if ( !ptr ) return 0;
         property->type = JSON_REAL;
     }
     if ( !isEndOfPrimitive( *ptr ) ) return 0;
     if ( JSON_INTEGER == property->type ) {
-        char const* value = property->u.value;
-        bool const negative = *value == '-';
-        static char const min[] = "-9223372036854775808";
-        static char const max[] = "9223372036854775807";
+        CHAR_T const* value = property->u.value;
+        bool const negative = *value == T('-');
+        static CHAR_T const min[] = T("-9223372036854775808");
+        static CHAR_T const max[] = T("9223372036854775807");
         unsigned int const maxdigits = ( negative? sizeof min: sizeof max ) - 1;
         unsigned int const len = ( unsigned int const ) ( ptr - value );
         if ( len > maxdigits ) return 0;
         if ( len == maxdigits ) {
-            char const tmp = *ptr;
-            *ptr = '\0';
-            char const* const threshold = negative ? min: max;
-            if ( 0 > strcmp( threshold, value ) ) return 0;
+            CHAR_T const tmp = *ptr;
+            *ptr = T('\0');
+            CHAR_T const* const threshold = negative ? min: max;
+#ifdef TINY_JSON_USE_WCHAR
+            if (0 > wcscmp (threshold, value))
+                return 0;
+#else
+            if (0 > strcmp (threshold, value))
+                return 0;
+#endif
             *ptr = tmp;
         }
     }
@@ -324,21 +334,21 @@ static void add( json_t* obj, json_t* property ) {
   * @param pool The handler of a json pool for creating json instances.
   * @retval Pointer to first character after the value. If success.
   * @retval Null pointer if any error occur. */
-static char* objValue( char* ptr, json_t* obj, jsonPool_t* pool ) {
-    obj->type    = *ptr == '{' ? JSON_OBJ : JSON_ARRAY;
+static CHAR_T* objValue( CHAR_T* ptr, json_t* obj, jsonPool_t* pool ) {
+    obj->type    = *ptr == T('{') ? JSON_OBJ : JSON_ARRAY;
     obj->u.c.child = 0;
     obj->sibling = 0;
     ptr++;
     for(;;) {
         ptr = goBlank( ptr );
         if ( !ptr ) return 0;
-        if ( *ptr == ',' ) {
+        if ( *ptr == T(',') ) {
             ++ptr;
             continue;
         }
-        char const endchar = ( obj->type == JSON_OBJ )? '}': ']';
+        CHAR_T const endchar = ( obj->type == JSON_OBJ )? T('}'): T(']');
         if ( *ptr == endchar ) {
-            *ptr = '\0';
+            *ptr = T('\0');
             json_t* parentObj = obj->sibling;
             if ( !parentObj ) return ++ptr;
             obj->sibling = 0;
@@ -349,7 +359,7 @@ static char* objValue( char* ptr, json_t* obj, jsonPool_t* pool ) {
         json_t* property = pool->alloc( pool );
         if ( !property ) return 0;
         if( obj->type != JSON_ARRAY ) {
-            if ( *ptr != '\"' ) return 0;
+            if ( *ptr != T('\"') ) return 0;
             ptr = propertyName( ptr, property );
             if ( !ptr ) return 0;
         }
@@ -357,24 +367,24 @@ static char* objValue( char* ptr, json_t* obj, jsonPool_t* pool ) {
         add( obj, property );
         property->u.value = ptr;
         switch( *ptr ) {
-            case '{':
+            case T('{'):
                 property->type    = JSON_OBJ;
                 property->u.c.child = 0;
                 property->sibling = obj;
                 obj = property;
                 ++ptr;
                 break;
-            case '[':
+            case T('['):
                 property->type    = JSON_ARRAY;
                 property->u.c.child = 0;
                 property->sibling = obj;
                 obj = property;
                 ++ptr;
                 break;
-            case '\"': ptr = textValue( ptr, property );  break;
-            case 't':  ptr = trueValue( ptr, property );  break;
-            case 'f':  ptr = falseValue( ptr, property ); break;
-            case 'n':  ptr = nullValue( ptr, property );  break;
+            case T('\"'): ptr = textValue( ptr, property );  break;
+            case T('t'):  ptr = trueValue( ptr, property );  break;
+            case T('f'):  ptr = falseValue( ptr, property ); break;
+            case T('n'):  ptr = nullValue( ptr, property );  break;
             default:   ptr = numValue( ptr, property );   break;
         }
         if ( !ptr ) return 0;
@@ -404,8 +414,8 @@ static json_t* poolAlloc( jsonPool_t* pool ) {
   * @param ch Character value to be checked.
   * @param set Set of characters. It is just a null-terminated string.
   * @return true or false there is membership or not. */
-static bool isOneOfThem( char ch, char const* set ) {
-    while( *set != '\0' )
+static bool isOneOfThem( CHAR_T ch, CHAR_T const* set ) {
+    while( *set != T('\0') )
         if ( ch == *set++ )
             return true;
     return false;
@@ -415,8 +425,8 @@ static bool isOneOfThem( char ch, char const* set ) {
   * @param str The initial pointer value.
   * @param set Set of characters. It is just a null-terminated string.
   * @return The final pointer value or null pointer if the null character was found. */
-static char* goWhile( char* str, char const* set ) {
-    for(; *str != '\0'; ++str ) {
+static CHAR_T* goWhile( CHAR_T* str, CHAR_T const* set ) {
+    for(; *str != T('\0'); ++str ) {
         if ( !isOneOfThem( *str, set ) )
             return str;
     }
@@ -424,20 +434,20 @@ static char* goWhile( char* str, char const* set ) {
 }
 
 /** Set of characters that defines a blank. */
-static char const* const blank = " \n\r\t\f";
+static CHAR_T const* const blank = T(" \n\r\t\f");
 
 /** Increases a pointer while it points to a white space character.
   * @param str The initial pointer value.
   * @return The final pointer value or null pointer if the null character was found. */
-static char* goBlank( char* str ) {
+static CHAR_T* goBlank( CHAR_T* str ) {
     return goWhile( str, blank );
 }
 
 /** Increases a pointer while it points to a decimal digit character.
   * @param str The initial pointer value.
   * @return The final pointer value or null pointer if the null character was found. */
-static char* goNum( char* str ) {
-    for( ; *str != '\0'; ++str ) {
+static CHAR_T* goNum( CHAR_T* str ) {
+    for( ; *str != T('\0'); ++str ) {
         if ( !isdigit( (int)(*str) ) )
             return str;
     }
@@ -445,17 +455,17 @@ static char* goNum( char* str ) {
 }
 
 /** Set of characters that defines the end of an array or a JSON object. */
-static char const* const endofblock = "}]";
+static CHAR_T const* const endofblock = T("}]");
 
-/** Set a char to '\0' and increase its pointer if the char is different to '}' or ']'.
+/** Set a CHAR_T to '\0' and increase its pointer if the CHAR_T is different to '}' or ']'.
   * @param ch Pointer to character.
   * @return  Final value pointer. */
-static char* setToNull( char* ch ) {
-    if ( !isOneOfThem( *ch, endofblock ) ) *ch++ = '\0';
+static CHAR_T* setToNull( CHAR_T* ch ) {
+    if ( !isOneOfThem( *ch, endofblock ) ) *ch++ = T('\0');
     return ch;
 }
 
 /** Indicate if a character is the end of a primitive value. */
-static bool isEndOfPrimitive( char ch ) {
-    return ch == ',' || isOneOfThem( ch, blank ) || isOneOfThem( ch, endofblock );
+static bool isEndOfPrimitive( CHAR_T ch ) {
+    return ch == T(',') || isOneOfThem( ch, blank ) || isOneOfThem( ch, endofblock );
 }
